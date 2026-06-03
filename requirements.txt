@@ -1,0 +1,7 @@
+google-generativeai
+python-dotenv
+sqlalchemy
+dateparser
+fastapi
+uvicorn
+pydantic
