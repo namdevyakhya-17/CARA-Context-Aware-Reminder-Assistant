@@ -3,6 +3,7 @@ import dateparser
 import json
 import re
 from .reminder_detector import detect_reminder
+from agents.agent2.context import ContextAgent
 
 def clean_json(text: str):
     text = re.sub(r"```json|```", "", text).strip()
@@ -23,8 +24,8 @@ def normalize_output(data: dict):
             data["date"] = parsed_date.strftime("%Y-%m-%d")
 
     # normalize time (8PM → 20:00)
-    if data.get("time"):
-        parsed_time = dateparser.parse(data["time"])
+    if data.get("raw_time"):
+        parsed_time = dateparser.parse(data["raw_time"])
         if parsed_time:
             data["time"] = parsed_time.strftime("%H:%M")
 
@@ -34,7 +35,14 @@ def process_text(text: str):
     result = detect_reminder(text)
     try:
         parsed = clean_json(result)
-        return normalize_output(parsed)
+        normalized = normalize_output(parsed)
+        print("\n******AGENT-1 OUTPUT*******")
+        print(normalized)
+        context_agent = ContextAgent()
+        enriched = context_agent.process(normalized)
+        print("\n******AGENT-2 OUTPUT*******")
+        print(enriched)
+        return enriched
 
     except Exception:
         return {
