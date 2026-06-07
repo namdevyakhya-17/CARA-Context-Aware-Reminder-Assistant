@@ -3,7 +3,7 @@ import dateparser
 import json
 import re
 from .reminder_detector import detect_reminder
-from agents.agent2.context import ContextAgent
+from agents.context_detection_agent.context import ContextAgent
 
 def clean_json(text: str):
     text = re.sub(r"```json|```", "", text).strip()

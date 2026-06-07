@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
-from agents.agent1.processor import process_text
+from agents.nlp_understanding_agent.processor import process_text
 
 router = APIRouter()
 

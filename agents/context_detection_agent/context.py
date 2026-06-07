@@ -1,6 +1,6 @@
 # from utils.datetime_parser import normalize_datetime
-from agents.agent2.priority_rules import detect_priority
-from agents.agent2.trigger_rules import detect_trigger
+from agents.context_detection_agent.priority_rules import detect_priority
+from agents.context_detection_agent.trigger_rules import detect_trigger
 
 class ContextAgent:
     def process(self, reminder):
@@ -12,4 +12,4 @@ class ContextAgent:
             missing.append("time")
 
         reminder["missing_fields"] = missing
-        return reminder
+        return reminder 
