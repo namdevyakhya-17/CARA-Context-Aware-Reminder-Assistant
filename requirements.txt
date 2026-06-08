@@ -5,3 +5,4 @@ dateparser
 fastapi
 uvicorn
 pydantic
+geopy
