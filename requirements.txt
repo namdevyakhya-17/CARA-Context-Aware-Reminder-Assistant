@@ -6,3 +6,6 @@ fastapi
 uvicorn
 pydantic
 geopy
+scikit-learn
+pandas
+joblib

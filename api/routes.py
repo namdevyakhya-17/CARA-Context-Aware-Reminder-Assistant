@@ -8,6 +8,7 @@ from agents.location_services_agent.location_store import save_current_location
 from agents.location_services_agent.resolver import resolve_location
 from agents.location_services_agent.reminder_store import save_reminder
 from agents.location_services_agent.checker import check_reminders
+from agents.notification_decision_agent.decision_service import NotificationDecisionAgent
 
 router = APIRouter()
 
@@ -74,3 +75,24 @@ def update_user_location(payload: dict):
     return {
         "triggered": triggered
     }
+
+notification_agent = NotificationDecisionAgent()
+@router.post("/notification/decide")
+def decide(data: dict):
+    reminder = data["reminder"]
+    context = data["context"]
+    return notification_agent.decide(reminder, context)
+
+@router.post("/notification/snooze")
+def snooze(data: dict):
+    return notification_agent.snooze_reminder(
+        reminder_id=data["reminder_id"],
+        custom_time=data.get("snooze_minutes")
+    )
+
+@router.post("/notification/advance")
+def advance(data: dict):
+    return notification_agent.advance_reminder(
+        reminder_id = data["reminder_id"],
+        minutes = data["advance_minutes"]
+    )
