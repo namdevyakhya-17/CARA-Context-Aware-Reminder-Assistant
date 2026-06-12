@@ -1,11 +1,17 @@
 [
     {
-        "id": "7778ca8a-a131-4317-952d-ec126568f947",
-        "task": "Take medicine",
-        "location_name": "home",
-        "latitude": 28.4804522,
-        "longitude": 77.4900616,
-        "radius": 100,
-        "status": "triggered"
+        "id": "448df465-9025-4221-9a2f-9e9636b34843",
+        "task": "message my mother",
+        "intent": "reminder",
+        "entities": [],
+        "trigger_type": "time",
+        "date": "2026-06-12",
+        "raw_time": "9:17pm",
+        "notification_time": "21:17",
+        "location": "",
+        "location_name": "",
+        "priority": "medium",
+        "status": "completed",
+        "snooze_until": ""
     }
 ]

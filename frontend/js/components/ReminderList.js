@@ -12,7 +12,7 @@ export function ReminderList(root, { getReminders, onDelete }) {
               <p class="reminder-title">${escapeHtml(reminder.task || "Untitled reminder")}</p>
               <div class="reminder-meta">
                 <span class="status ${escapeHtml(normalizeStatus(reminder.status))}">${escapeHtml(formatStatus(reminder.status))}</span>
-                <span>${escapeHtml(formatPriority(reminder.priority))}</span>
+                <span class="priority ${escapeHtml(normalizePriority(reminder.priority))}">${escapeHtml(formatPriority(reminder.priority))}</span>
                 <span>${escapeHtml(reminder.trigger_type || "unknown")}</span>
                 <span>${escapeHtml(reminder.date || "no date")}</span>
                 <span>${escapeHtml(reminder.raw_time || "no time")}</span>
@@ -56,4 +56,8 @@ function formatStatus(status = "pending") {
 function normalizeStatus(status = "pending") {
   if (status === "done") return "completed";
   return status || "pending";
+}
+
+function normalizePriority(priority = "medium") {
+  return String(priority || "medium").toLowerCase();
 }

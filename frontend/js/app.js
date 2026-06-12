@@ -1,8 +1,13 @@
 import {
-  createLocationReminder,
+  cancelReminder,
+  checkTimeReminders as checkDueTimeReminders,
+  completeReminder,
+  createCurrentLocationReminder,
+  createReminder,
   deleteReminder,
   decideNotification,
   extractReminder,
+  fetchReminders,
   getApiBase,
   setApiBase,
   snoozeNotification,
@@ -14,11 +19,12 @@ import { MissingFieldsForm } from "./components/MissingFieldsForm.js";
 import { LocationTracker } from "./components/LocationTracker.js";
 import { NotificationCard } from "./components/NotificationCard.js";
 import { ReminderList } from "./components/ReminderList.js";
+import { DashboardSummary } from "./components/DashboardSummary.js";
 
 const state = {
   currentReminder: null,
-  reminders: loadReminders(),
-  notification: loadNotification(),
+  reminders: [],
+  notification: null,
   snoozeMinutes: 10,
   location: {
     active: false,
@@ -26,16 +32,13 @@ const state = {
     latitude: null,
     longitude: null,
     message: ""
-  },
-  context: {
-    activity: "unknown",
-    battery_level: 100
   }
 };
 
 const roots = {
   apiBaseInput: document.querySelector("#apiBaseInput"),
   statusBanner: document.querySelector("#statusBanner"),
+  dashboardSummary: document.querySelector("#dashboardSummary"),
   reminderInput: document.querySelector("#reminderInput"),
   reminderPreview: document.querySelector("#reminderPreview"),
   missingFieldsForm: document.querySelector("#missingFieldsForm"),
@@ -48,12 +51,17 @@ roots.apiBaseInput.value = getApiBase();
 roots.apiBaseInput.addEventListener("change", () => {
   setApiBase(roots.apiBaseInput.value);
   showStatus("API base URL updated.", "success");
+  refreshReminders();
 });
 
 const components = {};
 
 components.reminderInput = ReminderInput(roots.reminderInput, {
   onSubmit: handleExtract
+});
+
+components.dashboardSummary = DashboardSummary(roots.dashboardSummary, {
+  getReminders: () => state.reminders
 });
 
 components.reminderPreview = ReminderPreview(roots.reminderPreview, {
@@ -86,12 +94,13 @@ components.notificationCard = NotificationCard(roots.notificationCard, {
 });
 
 components.reminderList = ReminderList(roots.reminderList, {
-  getReminders: getSortedReminders,
+  getReminders: () => state.reminders,
   onDelete: handleDeleteReminder
 });
 
-setInterval(checkTimeReminders, 30000);
-setTimeout(checkTimeReminders, 1000);
+refreshReminders();
+setInterval(pollTimeReminders, 30000);
+setTimeout(pollTimeReminders, 1000);
 
 async function handleExtract(text) {
   if (!text) {
@@ -105,7 +114,7 @@ async function handleExtract(text) {
     if (reminder.error) {
       throw new Error(reminder.error);
     }
-    setCurrentReminder(withClientId(reminder));
+    setCurrentReminder(reminder);
     showStatus("Reminder extracted. Review the details before confirming.", "success");
   } catch (error) {
     showStatus(`Extraction failed: ${error.message}`, "error");
@@ -122,29 +131,23 @@ async function handleConfirmReminder() {
     return;
   }
 
-  let savedReminder = {
+  const savedReminder = {
     ...reminder,
-    status: "pending",
-    notification_time: resolveClientNotificationTime(reminder.raw_time || reminder.time) || reminder.notification_time
+    status: "pending"
   };
 
   try {
-    if (savedReminder.trigger_type === "location" && savedReminder.location) {
-      const result = await createLocationReminder(savedReminder);
-      if (result?.reminder) {
-        savedReminder = { ...savedReminder, ...result.reminder };
-      }
+    const result = await saveReminderToBackend(savedReminder);
+    if (result?.reminder) {
+      upsertReminder(result.reminder);
     }
-
-    upsertReminder(savedReminder);
+    await refreshReminders();
     clearCurrentReminder();
     showStatus("Reminder saved as pending. CARA will notify you when it is triggered.", "success");
     alert("Your reminder has been set.");
   } catch (error) {
-    upsertReminder(savedReminder);
-    clearCurrentReminder();
-    showStatus(`Saved locally, but backend save failed: ${error.message}`, "error");
-    alert("Your reminder has been set locally, but backend save failed.");
+    showStatus(`Reminder save failed: ${error.message}`, "error");
+    alert("Reminder could not be saved. Please check the backend and try again.");
   }
 }
 
@@ -162,22 +165,15 @@ async function triggerReminder(reminder) {
 
   try {
     const decision = await decideNotification(triggeredReminder, context);
-    setNotification({
+    state.notification = {
       ...decision,
       reminder: triggeredReminder,
       editingSnooze: false,
       decidedAt: new Date().toLocaleString()
-    });
+    };
     showStatus("Reminder triggered. Agent 4 decision is shown in the popup.", "success");
   } catch (error) {
-    setNotification({
-      ...fallbackDecision(triggeredReminder, context),
-      reminder: triggeredReminder,
-      editingSnooze: false,
-      decidedAt: new Date().toLocaleString(),
-      message: `Local fallback shown because Agent 4 endpoint failed: ${error.message}`
-    });
-    showStatus("Agent 4 endpoint failed, so a local fallback decision is displayed.", "error");
+    showStatus(`Agent 4 decision failed: ${error.message}`, "error");
   }
 
   renderAll();
@@ -244,10 +240,7 @@ function stopLocationTracking() {
 }
 
 function handleDone() {
-  updateReminderStatus("completed");
-  clearNotification();
-  showStatus("Reminder marked done.", "success");
-  renderAll();
+  updateActiveReminderStatus("completed");
 }
 
 async function handleSnooze() {
@@ -261,14 +254,11 @@ async function handleSnooze() {
 
   try {
     const result = await snoozeNotification(reminderId, minutes);
-    setNotification({
-      ...state.notification,
-      ...result,
-      action: result.action || "snooze",
-      editingSnooze: false
-    });
-    snoozeCurrentReminder(minutes);
+    if (result?.reminder) {
+      upsertReminder(result.reminder);
+    }
     clearNotification();
+    await refreshReminders();
     showStatus(`Reminder snoozed for ${minutes} minutes.`, "success");
   } catch (error) {
     showStatus(`Snooze failed: ${error.message}`, "error");
@@ -280,34 +270,21 @@ async function handleSnooze() {
 function handleEditSnooze() {
   if (!state.notification) return;
   state.notification.editingSnooze = !state.notification.editingSnooze;
-  saveNotification();
   renderAll();
 }
 
 function handleCancel() {
-  updateReminderStatus("cancelled");
-  clearNotification();
-  showStatus("Reminder cancelled.", "success");
-  renderAll();
+  updateActiveReminderStatus("cancelled");
 }
 
 function setCurrentReminder(reminder) {
-  state.currentReminder = withClientId(reminder);
+  state.currentReminder = reminder;
   renderAll();
 }
 
 function clearCurrentReminder() {
   state.currentReminder = null;
   renderAll();
-}
-
-function withClientId(reminder) {
-  return {
-    id: reminder.id || reminder.reminder_id || crypto.randomUUID(),
-    intent: "reminder",
-    entities: [],
-    ...reminder
-  };
 }
 
 function upsertReminder(reminder) {
@@ -317,57 +294,69 @@ function upsertReminder(reminder) {
   } else {
     state.reminders.unshift(reminder);
   }
-  saveReminders();
   renderAll();
 }
 
-function updateReminderStatus(status) {
+async function saveReminderToBackend(reminder) {
+  if (
+    reminder.trigger_type === "location" &&
+    state.location.latitude !== null &&
+    state.location.longitude !== null &&
+    !reminder.location
+  ) {
+    return createCurrentLocationReminder(
+      {
+        ...reminder,
+        location: "current location"
+      },
+      state.location.latitude,
+      state.location.longitude
+    );
+  }
+
+  return createReminder(reminder);
+}
+
+async function refreshReminders() {
+  try {
+    const result = await fetchReminders();
+    state.reminders = result.reminders || [];
+    renderAll();
+  } catch (error) {
+    showStatus(`Could not load reminders: ${error.message}`, "error");
+  }
+}
+
+async function updateActiveReminderStatus(status) {
   const reminder = state.notification?.reminder;
   if (!reminder) return;
 
-  const updated = { ...reminder, status };
-  state.notification.reminder = updated;
-  saveNotification();
-  upsertReminder(updated);
-}
+  try {
+    const result = status === "completed"
+      ? await completeReminder(reminder.id)
+      : await cancelReminder(reminder.id);
 
-function snoozeCurrentReminder(minutes) {
-  const reminder = state.notification?.reminder;
-  if (!reminder) return;
+    if (result?.reminder) {
+      upsertReminder(result.reminder);
+    }
+    clearNotification();
+    await refreshReminders();
+    showStatus(status === "completed" ? "Reminder marked done." : "Reminder cancelled.", "success");
+  } catch (error) {
+    showStatus(`Could not update reminder status: ${error.message}`, "error");
+  }
 
-  const snoozeUntil = new Date(Date.now() + minutes * 60000).toISOString();
-  const updated = {
-    ...reminder,
-    status: "pending",
-    snooze_until: snoozeUntil
-  };
-  upsertReminder(updated);
-}
-
-function setNotification(notification) {
-  state.notification = notification;
-  saveNotification();
+  renderAll();
 }
 
 function clearNotification() {
   state.notification = null;
-  localStorage.removeItem("caraNotification");
 }
 
 async function readContext() {
-  let batteryLevel = 100;
-  if (navigator.getBattery) {
-    try {
-      const battery = await navigator.getBattery();
-      batteryLevel = Math.round(battery.level * 100);
-    } catch {
-      batteryLevel = 100;
-    }
-  }
-
   return {
-    ...state.context,
-    battery_level: batteryLevel,
+    activity: "unknown",
+    battery_level: 100,
     location: {
       latitude: state.location.latitude,
       longitude: state.location.longitude
@@ -375,99 +364,33 @@ async function readContext() {
   };
 }
 
-function fallbackDecision(reminder, context) {
-  const priority = String(reminder.priority || "medium").toLowerCase();
-  const activity = String(context.activity || "unknown").toLowerCase();
-
-  if (priority === "high") return { action: "notify_now" };
-  if (activity === "driving") return { action: "delay", delay_minutes: 15 };
-  if (activity === "meeting") return { action: "delay", delay_minutes: 30 };
-  if (activity === "sleeping") return { action: "delay", delay_minutes: 60 };
-  if ((context.battery_level || 100) < 5) return { action: "delay", delay_minutes: 20 };
-  return { action: "notify_now" };
-}
-
-function checkTimeReminders() {
+async function pollTimeReminders() {
   if (state.notification) return;
 
-  const now = new Date();
-  const dueReminder = state.reminders.find((reminder) => {
-    if ((reminder.status || "pending") !== "pending") return false;
-    if (reminder.trigger_type !== "time") return false;
-
-    if (reminder.snooze_until) {
-      return new Date(reminder.snooze_until) <= now;
+  try {
+    const result = await checkDueTimeReminders();
+    if (Array.isArray(result.triggered) && result.triggered.length) {
+      await refreshReminders();
+      triggerReminder(result.triggered[0]);
     }
-
-    const dueAt = getReminderDueDate(reminder);
-    return dueAt ? dueAt <= now : false;
-  });
-
-  if (dueReminder) {
-    triggerReminder(dueReminder);
+  } catch (error) {
+    showStatus(`Time reminder check failed: ${error.message}`, "error");
   }
 }
 
-function getReminderDueDate(reminder) {
-  if (!reminder.date) return null;
-
-  const time = reminder.notification_time || resolveClientNotificationTime(reminder.raw_time || reminder.time);
-  if (!time) return null;
-
-  const dueAt = new Date(`${reminder.date}T${time}:00`);
-  return Number.isNaN(dueAt.getTime()) ? null : dueAt;
-}
-
-function resolveClientNotificationTime(rawTime = "") {
-  const normalized = String(rawTime).toLowerCase().trim();
-  const defaultTimes = {
-    morning: "09:00",
-    afternoon: "13:00",
-    "after noon": "13:00",
-    evening: "18:00",
-    night: "21:00",
-    tonight: "21:00",
-    noon: "12:00"
-  };
-
-  if (defaultTimes[normalized]) return defaultTimes[normalized];
-
-  const parsed = new Date(`1970-01-01 ${rawTime}`);
-  if (Number.isNaN(parsed.getTime())) return "";
-
-  return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
-}
-
 async function handleDeleteReminder(reminderId) {
-  state.reminders = state.reminders.filter((reminder) => reminder.id !== reminderId);
-  saveReminders();
-
   if (state.notification?.reminder?.id === reminderId) {
     clearNotification();
   }
 
-  renderAll();
-
   try {
     await deleteReminder(reminderId);
+    state.reminders = state.reminders.filter((reminder) => reminder.id !== reminderId);
+    renderAll();
     showStatus("Reminder removed from the list and backend store.", "success");
   } catch (error) {
-    showStatus(`Reminder removed locally. Backend delete did not find it: ${error.message}`, "error");
+    showStatus(`Reminder delete failed: ${error.message}`, "error");
   }
-}
-
-function getSortedReminders() {
-  const priorityOrder = {
-    high: 0,
-    medium: 1,
-    low: 2
-  };
-
-  return [...state.reminders].sort((a, b) => {
-    const aPriority = priorityOrder[String(a.priority || "medium").toLowerCase()] ?? 1;
-    const bPriority = priorityOrder[String(b.priority || "medium").toLowerCase()] ?? 1;
-    return aPriority - bPriority;
-  });
 }
 
 function normalizeLocationReminder(reminder) {
@@ -488,38 +411,10 @@ function showStatus(message, type = "") {
 }
 
 function renderAll() {
+  components.dashboardSummary.render();
   components.reminderPreview.render();
   components.missingFieldsForm.render();
   components.locationTracker.render();
   components.notificationCard.render();
   components.reminderList.render();
-}
-
-function loadReminders() {
-  try {
-    return JSON.parse(localStorage.getItem("caraReminders") || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveReminders() {
-  localStorage.setItem("caraReminders", JSON.stringify(state.reminders));
-}
-
-function loadNotification() {
-  try {
-    return JSON.parse(localStorage.getItem("caraNotification") || "null");
-  } catch {
-    return null;
-  }
-}
-
-function saveNotification() {
-  if (!state.notification) {
-    localStorage.removeItem("caraNotification");
-    return;
-  }
-
-  localStorage.setItem("caraNotification", JSON.stringify(state.notification));
 }

@@ -26,11 +26,13 @@ export function NotificationCard(root, {
           <h2 id="notificationTitle">Reminder Triggered</h2>
           <h3>${formatAction(notification.action)}</h3>
           <p>${reminder.task || notification.message || "Reminder is ready."}</p>
+          ${notification.reason ? `<p class="decision-reason">${notification.reason}</p>` : ""}
           ${notification.decidedAt ? `<p class="decision-time">Triggered: ${notification.decidedAt}</p>` : ""}
           <div class="pill-row">
             <span class="pill">Priority: ${reminder.priority || "medium"}</span>
             <span class="pill">Snooze: ${snoozeMinutes || 10} min</span>
             <span class="pill">${reminder.trigger_type || "time"}</span>
+            ${notification.confidence ? `<span class="pill">Confidence: ${notification.confidence}</span>` : ""}
           </div>
         </div>
         <div id="snoozeEditor" class="split-row" ${notification.editingSnooze ? "" : "hidden"}>

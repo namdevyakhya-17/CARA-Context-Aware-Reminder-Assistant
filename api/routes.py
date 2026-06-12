@@ -6,7 +6,13 @@ from agents.location_services_agent.geocoder import get_coordinates
 from agents.location_services_agent.location_store import save_location_by_address
 from agents.location_services_agent.location_store import save_current_location
 from agents.location_services_agent.resolver import resolve_location
+from agents.location_services_agent.reminder_store import create_reminder
+from agents.location_services_agent.reminder_store import load_reminders
+from agents.location_services_agent.reminder_store import mark_due_time_reminders
 from agents.location_services_agent.reminder_store import save_reminder
+from agents.location_services_agent.reminder_store import snooze_reminder as snooze_stored_reminder
+from agents.location_services_agent.reminder_store import sort_reminders
+from agents.location_services_agent.reminder_store import update_reminder_status
 from agents.location_services_agent.reminder_store import delete_reminder
 from agents.location_services_agent.checker import check_reminders
 from agents.notification_decision_agent.decision_service import NotificationDecisionAgent
@@ -65,6 +71,81 @@ def create_location_reminder(payload: dict):
     return {
         "success": True,
         "reminder": reminder
+    }
+
+@router.post("/reminders")
+def add_reminder(payload: dict):
+    reminder_data = dict(payload)
+
+    if reminder_data.get("trigger_type") == "location" and reminder_data.get("location"):
+        coords = resolve_location(reminder_data["location"])
+        if coords:
+            reminder_data["latitude"] = coords["latitude"]
+            reminder_data["longitude"] = coords["longitude"]
+            reminder_data["radius"] = reminder_data.get("radius", 100)
+
+    reminder = create_reminder(reminder_data)
+    return {
+        "success": True,
+        "reminder": reminder
+    }
+
+@router.get("/reminders")
+def list_reminders():
+    return {
+        "reminders": sort_reminders(load_reminders())
+    }
+
+@router.post("/reminders/use-current-location")
+def use_current_location_reminder(payload: dict):
+    reminder = create_reminder(
+        {
+            **payload,
+            "trigger_type": "location",
+            "location": payload.get("location", "current location"),
+            "location_name": payload.get("location", "current location"),
+            "latitude": payload["latitude"],
+            "longitude": payload["longitude"],
+            "radius": payload.get("radius", 100),
+            "status": "pending",
+        }
+    )
+    return {
+        "success": True,
+        "reminder": reminder
+    }
+
+@router.post("/check-time-reminders")
+def check_time_reminders():
+    return {
+        "triggered": mark_due_time_reminders()
+    }
+
+@router.patch("/reminders/{reminder_id}/complete")
+def complete_reminder(reminder_id: str):
+    reminder = update_reminder_status(reminder_id, "completed")
+    return {
+        "success": reminder is not None,
+        "reminder": reminder
+    }
+
+@router.patch("/reminders/{reminder_id}/cancel")
+def cancel_reminder(reminder_id: str):
+    reminder = update_reminder_status(reminder_id, "cancelled")
+    return {
+        "success": reminder is not None,
+        "reminder": reminder
+    }
+
+@router.patch("/reminders/{reminder_id}/snooze")
+def snooze_saved_reminder(reminder_id: str, payload: dict):
+    minutes = payload.get("snooze_minutes", 10)
+    notification_agent.snooze_reminder(reminder_id, minutes)
+    reminder = snooze_stored_reminder(reminder_id, minutes)
+    return {
+        "success": reminder is not None,
+        "reminder": reminder,
+        "snooze_minutes": minutes
     }
 
 @router.delete("/reminders/{reminder_id}")

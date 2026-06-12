@@ -35,6 +35,48 @@ async function request(path, payload) {
   return data;
 }
 
+async function getRequest(path) {
+  const response = await fetch(`${apiBase}${path}`);
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = { message: "Backend returned a non-JSON response." };
+  }
+
+  if (!response.ok) {
+    const message = data?.detail || data?.message || `Request failed with ${response.status}`;
+    throw new Error(Array.isArray(message) ? JSON.stringify(message) : message);
+  }
+
+  return data;
+}
+
+async function patchRequest(path, payload = {}) {
+  const response = await fetch(`${apiBase}${path}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = { message: "Backend returned a non-JSON response." };
+  }
+
+  if (!response.ok) {
+    const message = data?.detail || data?.message || `Request failed with ${response.status}`;
+    throw new Error(Array.isArray(message) ? JSON.stringify(message) : message);
+  }
+
+  return data;
+}
+
 async function deleteRequest(path) {
   const response = await fetch(`${apiBase}${path}`, {
     method: "DELETE"
@@ -63,11 +105,24 @@ export function updateUserLocation(latitude, longitude) {
   return request("/update-user-location", { latitude, longitude });
 }
 
-export function createLocationReminder(reminder) {
-  return request("/create-location-reminder", {
-    task: reminder.task,
-    location: reminder.location
+export function createReminder(reminder) {
+  return request("/reminders", reminder);
+}
+
+export function createCurrentLocationReminder(reminder, latitude, longitude) {
+  return request("/reminders/use-current-location", {
+    ...reminder,
+    latitude,
+    longitude
   });
+}
+
+export function fetchReminders() {
+  return getRequest("/reminders");
+}
+
+export function checkTimeReminders() {
+  return request("/check-time-reminders", {});
 }
 
 export function decideNotification(reminder, context) {
@@ -75,12 +130,19 @@ export function decideNotification(reminder, context) {
 }
 
 export function snoozeNotification(reminderId, snoozeMinutes = 10) {
-  return request("/notification/snooze", {
-    reminder_id: reminderId,
+  return patchRequest(`/reminders/${encodeURIComponent(reminderId)}/snooze`, {
     snooze_minutes: snoozeMinutes
   });
 }
 
 export function deleteReminder(reminderId) {
   return deleteRequest(`/reminders/${encodeURIComponent(reminderId)}`);
+}
+
+export function completeReminder(reminderId) {
+  return patchRequest(`/reminders/${encodeURIComponent(reminderId)}/complete`);
+}
+
+export function cancelReminder(reminderId) {
+  return patchRequest(`/reminders/${encodeURIComponent(reminderId)}/cancel`);
 }
