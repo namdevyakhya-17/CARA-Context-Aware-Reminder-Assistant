@@ -25,11 +25,33 @@ def normalize_output(data: dict):
 
     # normalize time (8PM → 20:00)
     if data.get("raw_time"):
+        data["notification_time"] = resolve_notification_time(data["raw_time"])
         parsed_time = dateparser.parse(data["raw_time"])
         if parsed_time:
             data["time"] = parsed_time.strftime("%H:%M")
 
     return data
+
+def resolve_notification_time(raw_time: str):
+    normalized = raw_time.lower().strip()
+    default_times = {
+        "morning": "09:00",
+        "afternoon": "13:00",
+        "after noon": "13:00",
+        "evening": "18:00",
+        "night": "21:00",
+        "tonight": "21:00",
+        "noon": "12:00",
+    }
+
+    if normalized in default_times:
+        return default_times[normalized]
+
+    parsed_time = dateparser.parse(raw_time)
+    if parsed_time:
+        return parsed_time.strftime("%H:%M")
+
+    return ""
 
 def process_text(text: str):
     result = detect_reminder(text)

@@ -21,3 +21,7 @@ def save_action(reminder_id, action):
     FILE.write_text(
         json.dumps(data, indent=4)
     )
+
+class NotificationHistory:
+    def log(self, reminder_id, action):
+        save_action(reminder_id, action)

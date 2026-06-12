@@ -1,15 +1,15 @@
-from agents.notification_decision_agent.rule_engine import RuleEnginer
+from agents.notification_decision_agent.rule_engine import RuleEngine
 from agents.notification_decision_agent.notification_history import NotificationHistory
 from agents.notification_decision_agent.snooze_manager import SnoozeManager
 
 class NotificationDecisionAgent:
     def __init__(self):
-        self.rule_engine = RuleEnginer()
+        self.rule_engine = RuleEngine()
         self.history = NotificationHistory()
         self.snooze = SnoozeManager()
 
     def decide(self,reminder,context):
-        decision = self.rule_enginer.evaluate(reminder, context)
+        decision = self.rule_engine.evaluate(reminder, context)
         self.history.log(reminder["id"],decision["action"])
         return decision
 

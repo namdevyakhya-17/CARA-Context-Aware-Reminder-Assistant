@@ -32,3 +32,15 @@ def save_reminder(task, location_name, coords):
         json.dump(reminders, f, indent=4)
 
     return reminder
+
+def delete_reminder(reminder_id):
+    reminders = load_reminders()
+    remaining = [
+        reminder for reminder in reminders
+        if reminder.get("id") != reminder_id
+    ]
+
+    with open(FILE, "w") as f:
+        json.dump(remaining, f, indent=4)
+
+    return len(remaining) != len(reminders)

@@ -1,6 +1,6 @@
 def evaluate_rules(reminder, context):
 
-    priority = reminder["priority"].lower()
+    priority = reminder.get("priority", "medium").lower()
 
     activity = context.get(
         "activity",
@@ -40,3 +40,7 @@ def evaluate_rules(reminder, context):
     return {
         "action": "NOTIFY_NOW"
     }
+
+class RuleEngine:
+    def evaluate(self, reminder, context):
+        return evaluate_rules(reminder, context)

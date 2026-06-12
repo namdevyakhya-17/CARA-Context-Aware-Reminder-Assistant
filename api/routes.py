@@ -7,6 +7,7 @@ from agents.location_services_agent.location_store import save_location_by_addre
 from agents.location_services_agent.location_store import save_current_location
 from agents.location_services_agent.resolver import resolve_location
 from agents.location_services_agent.reminder_store import save_reminder
+from agents.location_services_agent.reminder_store import delete_reminder
 from agents.location_services_agent.checker import check_reminders
 from agents.notification_decision_agent.decision_service import NotificationDecisionAgent
 
@@ -64,6 +65,14 @@ def create_location_reminder(payload: dict):
     return {
         "success": True,
         "reminder": reminder
+    }
+
+@router.delete("/reminders/{reminder_id}")
+def remove_reminder(reminder_id: str):
+    deleted = delete_reminder(reminder_id)
+    return {
+        "success": deleted,
+        "reminder_id": reminder_id
     }
 
 @router.post("/update-user-location")
