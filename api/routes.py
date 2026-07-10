@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi import HTTPException
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from agents.nlp_understanding_agent.processor import process_text
@@ -25,6 +26,15 @@ router = APIRouter()
 
 class InputText(BaseModel):
     text: str
+
+
+class LocationPayload(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class SaveCurrentLocationPayload(LocationPayload):
+    name: str
 
 @router.post("/extract")
 def extract(data: InputText):
@@ -69,11 +79,12 @@ def location_suggestions(payload: dict):
     }
 
 @router.post("/save-current-location")
-def save_current(payload: dict):
+def save_current(payload: SaveCurrentLocationPayload):
+    validate_coordinates(payload.latitude, payload.longitude)
     return save_current_location(
-        payload["name"],
-        payload["latitude"],
-        payload["longitude"]
+        payload.name,
+        payload.latitude,
+        payload.longitude
     )
 
 @router.post("/create-location-reminder")
@@ -218,14 +229,22 @@ def remove_reminder(reminder_id: str):
     }
 
 @router.post("/update-user-location")
-def update_user_location(payload: dict):
+def update_user_location(payload: LocationPayload):
+    validate_coordinates(payload.latitude, payload.longitude)
     triggered = check_reminders(
-        payload["latitude"],
-        payload["longitude"]
+        payload.latitude,
+        payload.longitude
     )
     return {
         "triggered": triggered
     }
+
+
+def validate_coordinates(latitude, longitude):
+    if not -90 <= latitude <= 90:
+        raise HTTPException(status_code=422, detail="Latitude must be between -90 and 90.")
+    if not -180 <= longitude <= 180:
+        raise HTTPException(status_code=422, detail="Longitude must be between -180 and 180.")
 
 notification_agent = NotificationDecisionAgent()
 @router.post("/notification/decide")
