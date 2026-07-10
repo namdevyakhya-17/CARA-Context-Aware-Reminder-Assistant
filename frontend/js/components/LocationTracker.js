@@ -1,7 +1,8 @@
 export function LocationTracker(root, { onStart, onStop, getLocationState }) {
   function render() {
     const state = getLocationState();
-    const coordinates = state.latitude && state.longitude
+    const hasCoordinates = state.latitude !== null && state.longitude !== null;
+    const coordinates = hasCoordinates
       ? `${state.latitude.toFixed(5)}, ${state.longitude.toFixed(5)}`
       : "Not shared";
 

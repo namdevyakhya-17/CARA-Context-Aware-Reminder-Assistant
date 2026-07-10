@@ -230,6 +230,10 @@ async function startLocationTracking() {
     return;
   }
 
+  if (state.location.watchId !== null) {
+    navigator.geolocation.clearWatch(state.location.watchId);
+  }
+
   state.location.message = "Waiting for location permission...";
   renderAll();
 
@@ -257,6 +261,7 @@ async function startLocationTracking() {
     },
     (error) => {
       state.location.active = false;
+      state.location.watchId = null;
       state.location.message = error.message;
       renderAll();
     },
