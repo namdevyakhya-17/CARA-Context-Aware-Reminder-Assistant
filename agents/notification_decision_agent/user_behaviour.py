@@ -1,10 +1,12 @@
 import json
-from pathlib import Path
-FILE_PATH = Path("database/user_behavior.json")
+from utils.config import USER_BEHAVIOUR_FILE
+
+FILE_PATH = USER_BEHAVIOUR_FILE
 
 class UserBehaviorTracker:
     def __init__(self):
         if not FILE_PATH.exists():
+            FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
             FILE_PATH.write_text("[]")
 
     def update(self,user_id,action):

@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from agents.nlp_understanding_agent.processor import process_text
 from agents.location_services_agent.geocoder import get_coordinates
+from agents.location_services_agent.geocoder import suggest_addresses
+from agents.location_services_agent.location_store import get_saved_location
 from agents.location_services_agent.location_store import save_location_by_address
 from agents.location_services_agent.location_store import save_current_location
 from agents.location_services_agent.resolver import resolve_location
@@ -16,6 +18,8 @@ from agents.location_services_agent.reminder_store import update_reminder_status
 from agents.location_services_agent.reminder_store import delete_reminder
 from agents.location_services_agent.checker import check_reminders
 from agents.notification_decision_agent.decision_service import NotificationDecisionAgent
+from utils.config import DEFAULT_LOCATION_RADIUS_METERS
+from utils.config import PERSONAL_LOCATION_NAMES
 
 router = APIRouter()
 
@@ -29,7 +33,11 @@ def extract(data: InputText):
 
 @router.post("/save-location-address")
 def save_location(payload: dict):
-    coords = get_coordinates(payload["address"])
+    coords = {
+        "latitude": payload["latitude"],
+        "longitude": payload["longitude"]
+    } if payload.get("latitude") is not None and payload.get("longitude") is not None else get_coordinates(payload["address"])
+
     if not coords:
         return{
             "success":False,
@@ -43,6 +51,21 @@ def save_location(payload: dict):
     return{
         "success":True,
         "data":data
+    }
+
+@router.post("/location-suggestions")
+def location_suggestions(payload: dict):
+    query = payload.get("query", "").strip()
+    if not query:
+        return {
+            "success": False,
+            "suggestions": [],
+            "message": "Enter an address to search"
+        }
+
+    return {
+        "success": True,
+        "suggestions": suggest_addresses(query)
     }
 
 @router.post("/save-current-location")
@@ -77,17 +100,55 @@ def create_location_reminder(payload: dict):
 def add_reminder(payload: dict):
     reminder_data = dict(payload)
 
-    if reminder_data.get("trigger_type") == "location" and reminder_data.get("location"):
-        coords = resolve_location(reminder_data["location"])
+    if is_location_reminder(reminder_data):
+        location_name = reminder_data["location"]
+        saved_location = get_saved_location(location_name)
+
+        if is_personal_location_name(location_name) and not saved_location:
+            return needs_location_response(location_name)
+
+        coords = saved_location or resolve_location(location_name)
         if coords:
             reminder_data["latitude"] = coords["latitude"]
             reminder_data["longitude"] = coords["longitude"]
-            reminder_data["radius"] = reminder_data.get("radius", 100)
+            reminder_data["radius"] = reminder_data.get("radius", DEFAULT_LOCATION_RADIUS_METERS)
+        else:
+            return needs_location_response(location_name)
 
     reminder = create_reminder(reminder_data)
     return {
         "success": True,
         "reminder": reminder
+    }
+
+
+def is_personal_location_name(location_name):
+    normalized = str(location_name or "").strip().lower()
+    personal_prefixes = ("my ", "our ", "the ")
+
+    if normalized in PERSONAL_LOCATION_NAMES:
+        return True
+
+    for prefix in personal_prefixes:
+        if normalized.startswith(prefix) and normalized.removeprefix(prefix) in PERSONAL_LOCATION_NAMES:
+            return True
+
+    return False
+
+
+def is_location_reminder(reminder_data):
+    trigger_type = str(reminder_data.get("trigger_type", "")).lower()
+    return bool(reminder_data.get("location")) and (
+        trigger_type == "location" or "location" in trigger_type
+    )
+
+
+def needs_location_response(location_name):
+    return {
+        "success": False,
+        "needs_location": True,
+        "location": location_name,
+        "message": f"Location details are needed for {location_name}"
     }
 
 @router.get("/reminders")
@@ -106,7 +167,7 @@ def use_current_location_reminder(payload: dict):
             "location_name": payload.get("location", "current location"),
             "latitude": payload["latitude"],
             "longitude": payload["longitude"],
-            "radius": payload.get("radius", 100),
+            "radius": payload.get("radius", DEFAULT_LOCATION_RADIUS_METERS),
             "status": "pending",
         }
     )

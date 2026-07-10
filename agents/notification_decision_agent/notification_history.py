@@ -1,8 +1,8 @@
 import json
-from pathlib import Path
 from datetime import datetime
+from utils.config import NOTIFICATION_HISTORY_FILE
 
-FILE=Path("database/notification_history.json")
+FILE = NOTIFICATION_HISTORY_FILE
 
 def save_action(reminder_id, action):
     try:
@@ -18,6 +18,7 @@ def save_action(reminder_id, action):
         }
     )
 
+    FILE.parent.mkdir(parents=True, exist_ok=True)
     FILE.write_text(
         json.dumps(data, indent=4)
     )

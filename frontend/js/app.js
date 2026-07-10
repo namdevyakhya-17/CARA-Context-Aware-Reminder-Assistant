@@ -9,20 +9,27 @@ import {
   extractReminder,
   fetchReminders,
   getApiBase,
+  saveCurrentLocation,
+  saveLocationAddress,
   setApiBase,
   snoozeNotification,
+  suggestLocationAddresses,
   updateUserLocation
 } from "./api.js";
 import { ReminderInput } from "./components/ReminderInput.js";
-import { ReminderPreview } from "./components/ReminderPreview.js";
+import { ReminderPreview } from "./components/ReminderPreview.js?v=20260628-1";
 import { MissingFieldsForm } from "./components/MissingFieldsForm.js";
 import { LocationTracker } from "./components/LocationTracker.js";
+import { LocationResolutionForm } from "./components/LocationResolutionForm.js?v=20260628-6";
 import { NotificationCard } from "./components/NotificationCard.js";
-import { ReminderList } from "./components/ReminderList.js";
+import { ReminderList } from "./components/ReminderList.js?v=20260628-1";
 import { DashboardSummary } from "./components/DashboardSummary.js";
+
+const ACTIVE_NOTIFICATION_KEY = "caraActiveNotification";
 
 const state = {
   currentReminder: null,
+  locationResolution: null,
   reminders: [],
   notification: null,
   snoozeMinutes: 10,
@@ -35,6 +42,8 @@ const state = {
   }
 };
 
+let timeReminderPollInProgress = false;
+
 const roots = {
   apiBaseInput: document.querySelector("#apiBaseInput"),
   statusBanner: document.querySelector("#statusBanner"),
@@ -42,6 +51,7 @@ const roots = {
   reminderInput: document.querySelector("#reminderInput"),
   reminderPreview: document.querySelector("#reminderPreview"),
   missingFieldsForm: document.querySelector("#missingFieldsForm"),
+  locationResolution: document.querySelector("#locationResolution"),
   locationTracker: document.querySelector("#locationTracker"),
   notificationCard: document.querySelector("#notificationCard"),
   reminderList: document.querySelector("#reminderList")
@@ -81,6 +91,16 @@ components.locationTracker = LocationTracker(roots.locationTracker, {
   getLocationState: () => state.location
 });
 
+components.locationResolution = LocationResolutionForm(roots.locationResolution, {
+  getRequest: () => state.locationResolution,
+  getLocationState: () => state.location,
+  onSaveAddress: handleSaveLocationAddress,
+  onSuggestAddress: handleSuggestLocationAddress,
+  onSelectSuggestion: handleSelectLocationSuggestion,
+  onUseCurrentLocation: handleUseCurrentLocationForPlace,
+  onCancel: clearLocationResolution
+});
+
 components.notificationCard = NotificationCard(roots.notificationCard, {
   getNotification: () => state.notification,
   getSnoozeMinutes: () => state.snoozeMinutes,
@@ -90,6 +110,7 @@ components.notificationCard = NotificationCard(roots.notificationCard, {
   onCancel: handleCancel,
   onSnoozeChange: (minutes) => {
     state.snoozeMinutes = minutes;
+    persistNotification();
   }
 });
 
@@ -98,9 +119,13 @@ components.reminderList = ReminderList(roots.reminderList, {
   onDelete: handleDeleteReminder
 });
 
-refreshReminders();
-setInterval(pollTimeReminders, 30000);
-setTimeout(pollTimeReminders, 1000);
+startApp();
+
+async function startApp() {
+  await initializeApp();
+  setInterval(pollTimeReminders, 30000);
+  setTimeout(pollTimeReminders, 1000);
+}
 
 async function handleExtract(text) {
   if (!text) {
@@ -138,6 +163,12 @@ async function handleConfirmReminder() {
 
   try {
     const result = await saveReminderToBackend(savedReminder);
+    if (result?.needs_location) {
+      requestLocationDetails(savedReminder, result.location);
+      showStatus(`Add location details for ${result.location} to finish saving this reminder.`, "error");
+      return;
+    }
+
     if (result?.reminder) {
       upsertReminder(result.reminder);
     }
@@ -156,24 +187,37 @@ async function triggerReminder(reminder) {
     return;
   }
 
-  const triggeredReminder = {
+  const actionRequiredReminder = {
     ...reminder,
-    status: "triggered"
+    status: "action_required"
   };
-  upsertReminder(triggeredReminder);
+  upsertReminder(actionRequiredReminder);
+
+  // Show an actionable popup immediately. The decision service enriches it,
+  // but a slow or failed decision must not make the reminder disappear.
+  state.notification = {
+    action: "notify_now",
+    message: "Choose Done, Snooze, or Cancel.",
+    reminder: actionRequiredReminder,
+    editingSnooze: false,
+    decidedAt: new Date().toLocaleString()
+  };
+  persistNotification();
+  renderAll();
+
   const context = await readContext();
 
   try {
-    const decision = await decideNotification(triggeredReminder, context);
+    const decision = await decideNotification(actionRequiredReminder, context);
     state.notification = {
+      ...state.notification,
       ...decision,
-      reminder: triggeredReminder,
-      editingSnooze: false,
-      decidedAt: new Date().toLocaleString()
+      reminder: actionRequiredReminder
     };
-    showStatus("Reminder triggered. Agent 4 decision is shown in the popup.", "success");
+    persistNotification();
+    showStatus("Reminder needs your action. The popup will stay open until you respond.", "success");
   } catch (error) {
-    showStatus(`Agent 4 decision failed: ${error.message}`, "error");
+    showStatus(`Reminder needs your action. Decision details were unavailable: ${error.message}`, "error");
   }
 
   renderAll();
@@ -203,7 +247,7 @@ async function startLocationTracking() {
 
       try {
         const result = await updateUserLocation(latitude, longitude);
-        if (Array.isArray(result.triggered) && result.triggered.length) {
+        if (!state.notification && Array.isArray(result.triggered) && result.triggered.length) {
           const triggeredReminder = normalizeLocationReminder(result.triggered[0]);
           await triggerReminder(triggeredReminder);
         }
@@ -270,6 +314,7 @@ async function handleSnooze() {
 function handleEditSnooze() {
   if (!state.notification) return;
   state.notification.editingSnooze = !state.notification.editingSnooze;
+  persistNotification();
   renderAll();
 }
 
@@ -285,6 +330,143 @@ function setCurrentReminder(reminder) {
 function clearCurrentReminder() {
   state.currentReminder = null;
   renderAll();
+}
+
+function requestLocationDetails(reminder, locationName) {
+  state.locationResolution = {
+    reminder,
+    locationName: locationName || reminder.location || "this place",
+    query: "",
+    suggestions: []
+  };
+  renderAll();
+}
+
+function clearLocationResolution() {
+  state.locationResolution = null;
+  renderAll();
+}
+
+async function handleSaveLocationAddress(address) {
+  const request = state.locationResolution;
+  if (!request) return;
+
+  address = address || request.query || "";
+
+  if (!address) {
+    showStatus("Enter the address before saving this location.", "error");
+    return;
+  }
+
+  try {
+    const selected = request.selectedSuggestion;
+    const savedLocation = await saveLocationAddress(
+      request.locationName,
+      selected?.address || address,
+      selected
+        ? {
+            latitude: selected.latitude,
+            longitude: selected.longitude
+          }
+        : null
+    );
+    if (!savedLocation?.success) {
+      throw new Error(savedLocation?.message || "Address could not be resolved.");
+    }
+
+    await retryLocationReminder(request.reminder);
+  } catch (error) {
+    showStatus(`Location save failed: ${error.message}`, "error");
+  }
+}
+
+async function handleSuggestLocationAddress(address) {
+  const request = state.locationResolution;
+  if (!request) return;
+
+  state.locationResolution = {
+    ...request,
+    query: address,
+    selectedSuggestion: null
+  };
+
+  if (!address) {
+    state.locationResolution = {
+      ...state.locationResolution,
+      suggestions: []
+    };
+    renderAll();
+    return;
+  }
+
+  if (address.length < 4) {
+    state.locationResolution = {
+      ...state.locationResolution,
+      suggestions: []
+    };
+    renderAll();
+    return;
+  }
+
+  try {
+    const result = await suggestLocationAddresses(address);
+    state.locationResolution = {
+      ...state.locationResolution,
+      suggestions: result.suggestions || []
+    };
+    renderAll();
+  } catch (error) {
+    showStatus(`Address search failed: ${error.message}`, "error");
+  }
+}
+
+async function handleSelectLocationSuggestion(suggestion) {
+  const request = state.locationResolution;
+  if (!request || !suggestion) return;
+
+  state.locationResolution = {
+    ...request,
+    query: suggestion.address,
+    selectedSuggestion: suggestion
+  };
+  renderAll();
+  showStatus("Address selected. Click Save Address and Reminder to continue.", "success");
+}
+
+async function handleUseCurrentLocationForPlace() {
+  const request = state.locationResolution;
+  if (!request) return;
+
+  if (state.location.latitude === null || state.location.longitude === null) {
+    showStatus("Enable location tracking before using your current location.", "error");
+    return;
+  }
+
+  try {
+    await saveCurrentLocation(request.locationName, state.location.latitude, state.location.longitude);
+    await retryLocationReminder(request.reminder);
+  } catch (error) {
+    showStatus(`Current location save failed: ${error.message}`, "error");
+  }
+}
+
+async function retryLocationReminder(reminder) {
+  const result = await saveReminderToBackend(reminder);
+  if (result?.needs_location) {
+    requestLocationDetails(reminder, result.location);
+    showStatus(`CARA still needs location details for ${result.location}.`, "error");
+    return;
+  }
+
+  if (result?.reminder) {
+    upsertReminder(result.reminder);
+  }
+
+  await refreshReminders();
+  clearCurrentReminder();
+  clearLocationResolution();
+  showStatus("Location saved and reminder set.", "success");
+  alert("Your location reminder has been set.");
 }
 
 function upsertReminder(reminder) {
@@ -327,6 +509,12 @@ async function refreshReminders() {
   }
 }
 
+async function initializeApp() {
+  await refreshReminders();
+  restoreActiveNotification();
+  renderAll();
+}
+
 async function updateActiveReminderStatus(status) {
   const reminder = state.notification?.reminder;
   if (!reminder) return;
@@ -351,6 +539,47 @@ async function updateActiveReminderStatus(status) {
 
 function clearNotification() {
   state.notification = null;
+  localStorage.removeItem(ACTIVE_NOTIFICATION_KEY);
+}
+
+function persistNotification() {
+  if (!state.notification) {
+    localStorage.removeItem(ACTIVE_NOTIFICATION_KEY);
+    return;
+  }
+
+  localStorage.setItem(ACTIVE_NOTIFICATION_KEY, JSON.stringify({
+    notification: state.notification,
+    snoozeMinutes: state.snoozeMinutes
+  }));
+}
+
+function restoreActiveNotification() {
+  const stored = localStorage.getItem(ACTIVE_NOTIFICATION_KEY);
+  if (!stored) return;
+
+  try {
+    const saved = JSON.parse(stored);
+    const reminderId = saved?.notification?.reminder?.id;
+    const currentReminder = state.reminders.find((reminder) => reminder.id === reminderId);
+
+    if (!currentReminder || !["action_required", "triggered"].includes(currentReminder.status)) {
+      localStorage.removeItem(ACTIVE_NOTIFICATION_KEY);
+      return;
+    }
+
+    state.notification = {
+      ...saved.notification,
+      reminder: {
+        ...saved.notification.reminder,
+        ...currentReminder,
+        status: "action_required"
+      }
+    };
+    state.snoozeMinutes = Number(saved.snoozeMinutes) || 10;
+  } catch {
+    localStorage.removeItem(ACTIVE_NOTIFICATION_KEY);
+  }
 }
 
 async function readContext() {
@@ -365,16 +594,19 @@ async function readContext() {
 }
 
 async function pollTimeReminders() {
-  if (state.notification) return;
+  if (state.notification || timeReminderPollInProgress) return;
 
+  timeReminderPollInProgress = true;
   try {
     const result = await checkDueTimeReminders();
     if (Array.isArray(result.triggered) && result.triggered.length) {
       await refreshReminders();
-      triggerReminder(result.triggered[0]);
+      await triggerReminder(result.triggered[0]);
     }
   } catch (error) {
     showStatus(`Time reminder check failed: ${error.message}`, "error");
+  } finally {
+    timeReminderPollInProgress = false;
   }
 }
 
@@ -400,7 +632,7 @@ function normalizeLocationReminder(reminder) {
     ...reminder,
     location: reminder.location || reminder.location_name || existing?.location || "",
     trigger_type: "location",
-    status: "triggered"
+    status: "action_required"
   };
 }
 
@@ -414,6 +646,7 @@ function renderAll() {
   components.dashboardSummary.render();
   components.reminderPreview.render();
   components.missingFieldsForm.render();
+  components.locationResolution.render();
   components.locationTracker.render();
   components.notificationCard.render();
   components.reminderList.render();

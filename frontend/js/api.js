@@ -117,6 +117,26 @@ export function createCurrentLocationReminder(reminder, latitude, longitude) {
   });
 }
 
+export function saveLocationAddress(name, address, coords = null) {
+  return request("/save-location-address", {
+    name,
+    address,
+    ...(coords || {})
+  });
+}
+
+export function suggestLocationAddresses(query) {
+  return request("/location-suggestions", { query });
+}
+
+export function saveCurrentLocation(name, latitude, longitude) {
+  return request("/save-current-location", {
+    name,
+    latitude,
+    longitude
+  });
+}
+
 export function fetchReminders() {
   return getRequest("/reminders");
 }

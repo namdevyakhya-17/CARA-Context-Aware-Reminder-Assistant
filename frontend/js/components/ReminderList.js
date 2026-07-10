@@ -15,7 +15,7 @@ export function ReminderList(root, { getReminders, onDelete }) {
                 <span class="priority ${escapeHtml(normalizePriority(reminder.priority))}">${escapeHtml(formatPriority(reminder.priority))}</span>
                 <span>${escapeHtml(reminder.trigger_type || "unknown")}</span>
                 <span>${escapeHtml(reminder.date || "no date")}</span>
-                <span>${escapeHtml(reminder.raw_time || "no time")}</span>
+                <span>${escapeHtml(formatReminderTime(reminder))}</span>
                 <span>${escapeHtml(reminder.location || "no location")}</span>
               </div>
             </li>
@@ -50,11 +50,24 @@ function formatPriority(priority = "medium") {
 
 function formatStatus(status = "pending") {
   if (status === "done") return "Status: completed";
+  if (status === "action_required" || status === "triggered") return "Status: action required";
   return `Status: ${status || "pending"}`;
+}
+
+function formatReminderTime(reminder) {
+  const notificationTime = reminder.notification_time;
+  const rawTime = reminder.raw_time;
+
+  if (notificationTime && rawTime && notificationTime !== rawTime) {
+    return `${notificationTime} (${rawTime})`;
+  }
+
+  return notificationTime || rawTime || "no time";
 }
 
 function normalizeStatus(status = "pending") {
   if (status === "done") return "completed";
+  if (status === "triggered") return "action_required";
   return status || "pending";
 }
 

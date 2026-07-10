@@ -1,18 +1,20 @@
 import json
 from agents.location_services_agent.geocoder import get_coordinates
+from utils.config import USER_LOCATIONS_FILE
 
-FILE = "database/user_locations.json"
+FILE = USER_LOCATIONS_FILE
 
 # API 1: To save home/office location
 def load_locations():
     try:
-        with open(FILE, "r") as f:
+        with FILE.open("r") as f:
             return json.load(f)
     except:
         return {}
 
 def save_locations(data):
-    with open(FILE, "w") as f:
+    FILE.parent.mkdir(parents=True, exist_ok=True)
+    with FILE.open("w") as f:
         json.dump(data, f, indent=4)
 
 def save_location_by_address(name, address, coords):

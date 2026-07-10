@@ -5,8 +5,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import dateparser
+from utils.config import DEFAULT_LOCATION_RADIUS_METERS
+from utils.config import REMINDERS_FILE
 
-FILE = Path("database/reminders.json")
+FILE = REMINDERS_FILE
 
 PRIORITY_ORDER = {
     "high": 0,
@@ -63,7 +65,7 @@ def create_reminder(payload):
     if payload.get("latitude") is not None and payload.get("longitude") is not None:
         reminder["latitude"] = payload["latitude"]
         reminder["longitude"] = payload["longitude"]
-        reminder["radius"] = payload.get("radius", 100)
+        reminder["radius"] = payload.get("radius", DEFAULT_LOCATION_RADIUS_METERS)
 
     reminders.append(reminder)
     write_reminders(reminders)
@@ -101,7 +103,7 @@ def save_reminder(task, location_name, coords):
             "location_name": location_name,
             "latitude": coords["latitude"],
             "longitude": coords["longitude"],
-            "radius": 100,
+            "radius": DEFAULT_LOCATION_RADIUS_METERS,
             "status": "pending",
         }
     )
@@ -161,7 +163,19 @@ def mark_due_time_reminders():
     changed = False
 
     for reminder in reminders:
-        if reminder.get("status", "pending") != "pending":
+        status = reminder.get("status", "pending")
+
+        # Existing unresolved reminders must not retrigger during polling.
+        # The polling endpoint returns only reminders that became due now.
+        if status == "triggered":
+            reminder["status"] = "action_required"
+            changed = True
+            continue
+
+        if status == "action_required":
+            continue
+
+        if status != "pending":
             continue
         if reminder.get("trigger_type") != "time":
             continue
@@ -178,7 +192,7 @@ def mark_due_time_reminders():
             if not due_at or due_at > now:
                 continue
 
-        reminder["status"] = "triggered"
+        reminder["status"] = "action_required"
         triggered.append(reminder)
         changed = True
 

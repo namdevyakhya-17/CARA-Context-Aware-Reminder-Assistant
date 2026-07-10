@@ -5,6 +5,7 @@ const EDITABLE_FIELDS = [
   "trigger_type",
   "date",
   "raw_time",
+  "notification_time",
   "location",
   "priority"
 ];

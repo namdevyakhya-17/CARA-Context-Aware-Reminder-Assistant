@@ -358,7 +358,8 @@ h3 {
   color: #136c43;
 }
 
-.status.triggered {
+.status.triggered,
+.status.action_required {
   background: #eaf2ff;
   color: #174d98;
 }
@@ -397,6 +398,47 @@ h3 {
 
 .split-row .field {
   flex: 1;
+}
+
+.suggestion-list {
+  display: grid;
+  gap: 0;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.suggestion-list button {
+  width: 100%;
+  height: auto;
+  min-height: 42px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: normal;
+}
+
+.suggestion-list li:last-child button {
+  border-bottom: 0;
+}
+
+.suggestion-list button:hover {
+  background: #f4f8fd;
+}
+
+.selected-suggestion {
+  margin: 10px 0 0;
+  border: 1px solid #b9e1cc;
+  border-radius: 6px;
+  background: #effaf4;
+  color: #136c43;
+  padding: 10px 12px;
+  font-size: 0.9rem;
 }
 
 @media (max-width: 780px) {

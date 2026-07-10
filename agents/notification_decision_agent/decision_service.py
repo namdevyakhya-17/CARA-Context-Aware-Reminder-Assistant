@@ -1,16 +1,19 @@
-from agents.notification_decision_agent.rule_engine import RuleEngine
 from agents.notification_decision_agent.notification_history import NotificationHistory
 from agents.notification_decision_agent.snooze_manager import SnoozeManager
 
 class NotificationDecisionAgent:
     def __init__(self):
-        self.rule_engine = RuleEngine()
         self.history = NotificationHistory()
         self.snooze = SnoozeManager()
 
-    def decide(self,reminder,context):
-        decision = self.rule_engine.evaluate(reminder, context)
-        self.history.log(reminder["id"],decision["action"])
+    def decide(self, reminder, context=None):
+        priority = str(reminder.get("priority", "medium")).lower()
+        decision = {
+            "action": "NOTIFY_NOW",
+            "reason": "The reminder trigger condition is met, so CARA is notifying now.",
+            "confidence": "high" if priority == "high" else "medium",
+        }
+        self.history.log(reminder["id"], decision["action"])
         return decision
 
     def snooze_reminder(self, reminder_id, custom_time=None):

@@ -2,6 +2,7 @@
 from agents.location_services_agent.geofence import distance
 from agents.location_services_agent.reminder_store import load_reminders
 from agents.location_services_agent.reminder_store import write_reminders
+from utils.config import DEFAULT_LOCATION_RADIUS_METERS
 
 def check_reminders(user_lat, user_lon):
     reminders = load_reminders()
@@ -29,12 +30,12 @@ def check_reminders(user_lat, user_lon):
             f"[CHECKER] Distance="
             f" {dist:.2f} meters"
         )
-        if dist<=reminder.get("radius", 100):
+        if dist <= reminder.get("radius", DEFAULT_LOCATION_RADIUS_METERS):
             print(
                 f"[TRIGGERED]"
                 f" {reminder.get('task', '')}"
             )
-            reminder["status"] = "triggered"
+            reminder["status"] = "action_required"
             triggered.append(reminder)
             changed = True
         
