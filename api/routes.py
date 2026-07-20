@@ -14,6 +14,7 @@ from agents.location_services_agent.reminder_store import mark_due_time_reminder
 from agents.location_services_agent.reminder_store import save_reminder
 from agents.location_services_agent.reminder_store import snooze_reminder as snooze_stored_reminder
 from agents.location_services_agent.reminder_store import sort_reminders
+from agents.location_services_agent.reminder_store import update_reminder
 from agents.location_services_agent.reminder_store import update_reminder_status
 from agents.location_services_agent.reminder_store import delete_reminder
 from agents.location_services_agent.checker import check_reminders
@@ -101,7 +102,24 @@ def add_reminder(payload: dict):
     reminder_data = dict(payload)
 
     if is_location_reminder(reminder_data):
-        location_name = reminder_data["location"]
+        location_name = (
+            reminder_data.get("location")
+            or reminder_data.get("location_name")
+            or reminder_data.get("placeName")
+            or reminder_data.get("place_name")
+        )
+        reminder_data["location"] = location_name
+        reminder_data["location_name"] = reminder_data.get("location_name", location_name)
+        reminder_data["trigger_type"] = normalize_location_trigger_type(reminder_data)
+
+        if reminder_data.get("latitude") is not None and reminder_data.get("longitude") is not None:
+            reminder_data["radius"] = reminder_data.get("radius", DEFAULT_LOCATION_RADIUS_METERS)
+            reminder = create_reminder(reminder_data)
+            return {
+                "success": True,
+                "reminder": reminder
+            }
+
         saved_location = get_saved_location(location_name)
 
         if is_personal_location_name(location_name) and not saved_location:
@@ -137,10 +155,23 @@ def is_personal_location_name(location_name):
 
 
 def is_location_reminder(reminder_data):
-    trigger_type = str(reminder_data.get("trigger_type", "")).lower()
-    return bool(reminder_data.get("location")) and (
+    trigger_type = str(reminder_data.get("trigger_type") or reminder_data.get("type") or "").lower()
+    return bool(
+        reminder_data.get("location")
+        or reminder_data.get("location_name")
+        or reminder_data.get("placeName")
+        or reminder_data.get("place_name")
+    ) and (
         trigger_type == "location" or "location" in trigger_type
     )
+
+
+def normalize_location_trigger_type(reminder_data):
+    reminder_type = str(reminder_data.get("type") or "").lower()
+    trigger_type = str(reminder_data.get("trigger_type") or "").lower()
+    if reminder_type == "both" or trigger_type in {"both", "time_location"}:
+        return "time_location"
+    return "location"
 
 
 def needs_location_response(location_name):
@@ -208,6 +239,16 @@ def snooze_saved_reminder(reminder_id: str, payload: dict):
         "reminder": reminder,
         "snooze_minutes": minutes
     }
+
+
+@router.patch("/reminders/{reminder_id}")
+def edit_reminder(reminder_id: str, payload: dict):
+    reminder = update_reminder(reminder_id, payload)
+    return {
+        "success": reminder is not None,
+        "reminder": reminder
+    }
+
 
 @router.delete("/reminders/{reminder_id}")
 def remove_reminder(reminder_id: str):

@@ -14,7 +14,6 @@ USER_LOCATIONS_FILE = Path(os.getenv("USER_LOCATIONS_FILE", DATABASE_DIR / "user
 NOTIFICATION_HISTORY_FILE = Path(
     os.getenv("NOTIFICATION_HISTORY_FILE", DATABASE_DIR / "notification_history.json")
 )
-USER_BEHAVIOUR_FILE = Path(os.getenv("USER_BEHAVIOUR_FILE", DATABASE_DIR / "user_behaviour.json"))
 
 DEFAULT_LOCATION_RADIUS_METERS = int(os.getenv("DEFAULT_LOCATION_RADIUS_METERS", "100"))
 GEOCODER_USER_AGENT = os.getenv("GEOCODER_USER_AGENT", "cara_location_agent")

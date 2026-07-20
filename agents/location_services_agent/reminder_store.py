@@ -45,27 +45,46 @@ def create_reminder(payload):
     notification_time = payload.get("notification_time") or resolve_notification_time(
         payload.get("raw_time") or payload.get("time") or ""
     )
+    reminder_type = payload.get("type") or payload.get("trigger_type", "time")
+    trigger_type = payload.get("trigger_type") or reminder_type
+    location_name = (
+        payload.get("location_name")
+        or payload.get("placeName")
+        or payload.get("place_name")
+        or payload.get("location", "")
+    )
+    created_at = payload.get("createdAt") or payload.get("created_at") or datetime.now().isoformat()
 
     reminder = {
         "id": payload.get("id") or str(uuid.uuid4()),
-        "task": payload.get("task", ""),
+        "type": reminder_type,
+        "task": payload.get("task") or payload.get("title", ""),
+        "title": payload.get("title") or payload.get("task", ""),
         "intent": payload.get("intent", "reminder"),
         "entities": payload.get("entities", []),
-        "trigger_type": payload.get("trigger_type", "time"),
+        "trigger_type": trigger_type,
         "date": payload.get("date", ""),
         "raw_time": payload.get("raw_time", ""),
         "notification_time": notification_time,
         "location": payload.get("location", ""),
-        "location_name": payload.get("location_name", payload.get("location", "")),
+        "location_name": location_name,
+        "placeName": payload.get("placeName") or location_name,
+        "address": payload.get("address", ""),
         "priority": payload.get("priority", "medium"),
         "status": payload.get("status", "pending"),
         "snooze_until": payload.get("snooze_until", ""),
+        "enabled": payload.get("enabled", True),
+        "triggered": payload.get("triggered", False),
+        "trigger_mode": payload.get("trigger_mode") or payload.get("triggerMode", "near"),
+        "triggerMode": payload.get("triggerMode") or payload.get("trigger_mode", "near"),
+        "created_at": created_at,
+        "createdAt": created_at,
     }
 
     if payload.get("latitude") is not None and payload.get("longitude") is not None:
-        reminder["latitude"] = payload["latitude"]
-        reminder["longitude"] = payload["longitude"]
-        reminder["radius"] = payload.get("radius", DEFAULT_LOCATION_RADIUS_METERS)
+        reminder["latitude"] = float(payload["latitude"])
+        reminder["longitude"] = float(payload["longitude"])
+        reminder["radius"] = int(payload.get("radius", DEFAULT_LOCATION_RADIUS_METERS))
 
     reminders.append(reminder)
     write_reminders(reminders)

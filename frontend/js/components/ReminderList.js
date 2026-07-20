@@ -1,4 +1,4 @@
-export function ReminderList(root, { getReminders, onDelete }) {
+export function ReminderList(root, { getReminders, onDelete, onEdit, onToggleEnabled }) {
   function render() {
     const reminders = getReminders();
 
@@ -13,11 +13,21 @@ export function ReminderList(root, { getReminders, onDelete }) {
               <div class="reminder-meta">
                 <span class="status ${escapeHtml(normalizeStatus(reminder.status))}">${escapeHtml(formatStatus(reminder.status))}</span>
                 <span class="priority ${escapeHtml(normalizePriority(reminder.priority))}">${escapeHtml(formatPriority(reminder.priority))}</span>
-                <span>${escapeHtml(reminder.trigger_type || "unknown")}</span>
+                <span>${escapeHtml(formatType(reminder))}</span>
                 <span>${escapeHtml(reminder.date || "no date")}</span>
                 <span>${escapeHtml(formatReminderTime(reminder))}</span>
-                <span>${escapeHtml(reminder.location || "no location")}</span>
+                <span>${escapeHtml(formatLocation(reminder))}</span>
+                ${isLocationReminder(reminder) ? `<span>${escapeHtml(reminder.radius || 100)}m</span>` : ""}
+                ${isLocationReminder(reminder) ? `<span>${reminder.enabled === false ? "Monitoring off" : "Monitoring on"}</span>` : ""}
               </div>
+              ${isLocationReminder(reminder) ? `
+                <div class="actions compact-actions">
+                  <button type="button" data-edit-id="${reminder.id}">Edit</button>
+                  <button type="button" data-toggle-id="${reminder.id}">
+                    ${reminder.enabled === false ? "Enable" : "Disable"}
+                  </button>
+                </div>
+              ` : ""}
             </li>
           `).join("")}
         </ul>
@@ -27,6 +37,18 @@ export function ReminderList(root, { getReminders, onDelete }) {
     root.querySelectorAll("[data-delete-id]").forEach((button) => {
       button.addEventListener("click", () => {
         onDelete(button.dataset.deleteId);
+      });
+    });
+
+    root.querySelectorAll("[data-edit-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        onEdit(button.dataset.editId);
+      });
+    });
+
+    root.querySelectorAll("[data-toggle-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        onToggleEnabled(button.dataset.toggleId);
       });
     });
   }
@@ -63,6 +85,18 @@ function formatReminderTime(reminder) {
   }
 
   return notificationTime || rawTime || "no time";
+}
+
+function formatType(reminder) {
+  return reminder.type || reminder.trigger_type || "unknown";
+}
+
+function formatLocation(reminder) {
+  return reminder.placeName || reminder.location_name || reminder.location || "no location";
+}
+
+function isLocationReminder(reminder) {
+  return String(reminder.trigger_type || reminder.type || "").toLowerCase().includes("location");
 }
 
 function normalizeStatus(status = "pending") {

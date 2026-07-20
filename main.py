@@ -1,8 +1,14 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from api.routes import router
 
 app = FastAPI()
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR / "frontend"
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,8 +25,15 @@ app.add_middleware(
 
 app.include_router(router)
 
+if FRONTEND_DIR.exists():
+    app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR), name="frontend")
+
 @app.get("/")
 def home():
+    index_path = FRONTEND_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+
     return {
-        "message":"Agentic Remainder's Home page"
+        "message": "CARA backend is running"
     }

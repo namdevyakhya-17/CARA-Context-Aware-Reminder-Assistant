@@ -1,9 +1,15 @@
-export function LocationTracker(root, { onStart, onStop, getLocationState }) {
+export function LocationTracker(root, { onStart, onStop, getLocationState, getReminders, getDistanceToReminder }) {
   function render() {
     const state = getLocationState();
-    const coordinates = state.latitude && state.longitude
+    const locationReminders = getReminders().filter(isLocationReminder);
+    const nearestReminder = nearestLocationReminder(locationReminders, getDistanceToReminder);
+    const hasCoordinates = state.latitude !== null && state.longitude !== null;
+    const coordinates = hasCoordinates
       ? `${state.latitude.toFixed(5)}, ${state.longitude.toFixed(5)}`
       : "Not shared";
+    const nearestText = nearestReminder
+      ? `${nearestReminder.name}: ${formatDistance(nearestReminder.distance)} / ${nearestReminder.radius}m`
+      : "No distance yet";
 
     root.innerHTML = `
       <h2>Location Tracker</h2>
@@ -11,6 +17,7 @@ export function LocationTracker(root, { onStart, onStop, getLocationState }) {
       <div class="pill-row" aria-label="Location status">
         <span class="pill">${state.active ? "Tracking on" : "Tracking off"}</span>
         <span class="pill">${coordinates}</span>
+        <span class="pill">${nearestText}</span>
       </div>
       <div class="actions">
         <button class="primary" id="startLocation" type="button">${state.active ? "Update Permission" : "Enable Location"}</button>
@@ -24,4 +31,26 @@ export function LocationTracker(root, { onStart, onStop, getLocationState }) {
 
   render();
   return { render };
+}
+
+function nearestLocationReminder(reminders, getDistanceToReminder) {
+  return reminders
+    .map((reminder) => ({
+      name: reminder.placeName || reminder.location_name || reminder.location || "Location reminder",
+      radius: Number(reminder.radius || 100),
+      distance: getDistanceToReminder(reminder)
+    }))
+    .filter((reminder) => reminder.distance !== null)
+    .sort((a, b) => a.distance - b.distance)[0] || null;
+}
+
+function formatDistance(distance) {
+  if (distance >= 1000) {
+    return `${(distance / 1000).toFixed(2)}km`;
+  }
+  return `${Math.round(distance)}m`;
+}
+
+function isLocationReminder(reminder) {
+  return String(reminder.trigger_type || reminder.type || "").toLowerCase().includes("location");
 }

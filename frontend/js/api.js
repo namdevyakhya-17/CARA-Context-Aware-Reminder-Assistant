@@ -155,6 +155,10 @@ export function snoozeNotification(reminderId, snoozeMinutes = 10) {
   });
 }
 
+export function updateReminder(reminderId, reminder) {
+  return patchRequest(`/reminders/${encodeURIComponent(reminderId)}`, reminder);
+}
+
 export function deleteReminder(reminderId) {
   return deleteRequest(`/reminders/${encodeURIComponent(reminderId)}`);
 }

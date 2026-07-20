@@ -1,46 +1,147 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CARA Reminder Console</title>
-    <link rel="stylesheet" href="./styles.css">
-  </head>
-  <body>
-    <main class="app-shell">
-      <section class="workspace">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">Context-Aware Reminder System</p>
-            <h1>CARA Reminder Console</h1>
-          </div>
-          <label class="api-config">
-            <span>API</span>
-            <input id="apiBaseInput" type="url" value="http://127.0.0.1:8000">
-          </label>
-        </header>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CARA - Context Aware Reminder Assistant</title>
+<link rel="stylesheet" href="/frontend/styles.css">
+</head>
+<body>
+<div class="page">
 
-        <div id="statusBanner" class="status-banner" role="status" hidden></div>
+  <div class="status-bar">
+      <div class="status-brand">Remember less. Live more. Let CARA handle the right reminders at the right time!</div>
+  </div>
 
-        <section id="dashboardSummary" class="panel"></section>
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-icon">☰</div>
+      <div>
+        <span class="stat-label">Total</span>
+        <span class="stat-value" data-stat="total">0</span>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="stat-icon">⏱</div>
+      <div>
+        <span class="stat-label">Pending</span>
+        <span class="stat-value" data-stat="pending">0</span>
+      </div>
+    </div>
+    <div class="stat triggered">
+      <div class="stat-icon">🔔</div>
+      <div>
+        <span class="stat-label">Triggered</span>
+        <span class="stat-value" data-stat="triggered">0</span>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="stat-icon">✓</div>
+      <div>
+        <span class="stat-label">Completed</span>
+        <span class="stat-value" data-stat="completed">0</span>
+      </div>
+    </div>
+    <div class="stat high-priority">
+      <div class="stat-icon">🔥</div>
+      <div>
+        <span class="stat-label">High priority</span>
+        <span class="stat-value" data-stat="high">0</span>
+      </div>
+    </div>
+  </div>
 
-        <section id="reminderInput" class="panel"></section>
+  <div class="hero">
+    <div class="eyebrow">Reminders reimagined</div>
+    <h1>Reminders that meet<br>you <span class="accent">where you are</span></h1>
+    <p class="hero-sub">CARA knows where you are and what time it is, so you get helpful reminders exactly when you need them!</p>
+    <div class="hero-actions">
+      <button class="btn btn-primary" type="button" data-scroll-target=".cards">Create reminder →</button>
+      <button class="btn btn-secondary" type="button" data-scroll-target=".reminders-head">View reminders</button>
+    </div>
+    <div class="hero-note">↓ works offline, syncs later</div>
+  </div>
 
-        <div class="grid">
-          <section id="reminderPreview" class="panel"></section>
-          <section id="missingFieldsForm" class="panel"></section>
+  <div class="cards">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-icon">🕐</div>
+        <div>
+          <p class="card-title">Time reminder</p>
+          <p class="card-subtitle">Nudge me at a moment</p>
         </div>
+      </div>
+      <div class="field">
+        <label>Reminder</label>
+        <input id="timeReminderText" type="text" placeholder="Remind me to submit problem set tomorrow at 8 pm">
+      </div>
+      <div class="toggle-row">
+        <div class="flag">High priority</div>
+        <button id="timePriorityToggle" class="switch" type="button" aria-label="Toggle high priority" aria-pressed="false"></button>
+      </div>
+      <button id="saveTimeReminder" class="btn-block" type="button">+ Save time reminder</button>
+    </div>
 
-        <section id="locationResolution" class="panel"></section>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-icon">📍</div>
+        <div>
+          <p class="card-title">Location reminder</p>
+          <p class="card-subtitle">Trigger on arrival</p>
+        </div>
+      </div>
+      <div class="field">
+        <label>Reminder</label>
+        <input id="locationReminderText" type="text" placeholder="Pick up oats &amp; milk">
+      </div>
+      <div class="field">
+        <label>Place</label>
+        <input id="locationReminderPlace" type="text" placeholder="Whole Foods, 5th Ave">
+        <div id="locationSuggestions" class="suggestion-list" hidden></div>
+      </div>
+      <div class="radius-row">
+        <label style="margin-bottom:0;">Radius</label>
+        <span class="radius-current">150 m</span>
+      </div>
+      <div class="radius-chips">
+        <button class="chip" type="button" data-radius="100">100 m</button>
+        <button class="chip" type="button" data-radius="250">250 m</button>
+        <button class="chip" type="button" data-radius="500">500 m</button>
+        <button class="chip" type="button" data-radius="1000">1000 m</button>
+      </div>
+      <div class="slider-row">
+        <input id="locationRadius" type="range" min="50" max="1000" value="150">
+        <div class="slider-value">150 m</div>
+      </div>
+      <div class="toggle-row">
+        <div class="flag">High priority</div>
+        <button id="locationPriorityToggle" class="switch" type="button" aria-label="Toggle high priority" aria-pressed="false"></button>
+      </div>
+      <button id="saveLocationReminder" class="btn-block" type="button">+ Save location reminder</button>
+    </div>
+  </div>
 
-        <section id="locationTracker" class="panel"></section>
+  <div class="reminders-head">
+    <div>
+      <p class="reminders-title">Your reminders</p>
+      <p class="reminders-count">0 total · 0 active</p>
+    </div>
+    <div class="filter-tabs">
+      <span class="active" data-filter="all">All</span>
+      <span data-filter="time">Time</span>
+      <span data-filter="location">Location</span>
+    </div>
+  </div>
 
-        <section id="reminderList" class="panel"></section>
-      </section>
-    </main>
+  <div class="empty-state">
+    No reminders yet. Create one above — it lives on your device.
+  </div>
 
-    <div id="notificationCard"></div>
+  <footer>
+    CARA · Context Aware Reminder Assistant · Designed with intention
+  </footer>
 
-    <script type="module" src="./js/app.js?v=20260628-7"></script>
-  </body>
+</div>
+<script type="module" src="/frontend/js/app.js"></script>
+</body>
 </html>
